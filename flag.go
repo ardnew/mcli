@@ -884,7 +884,7 @@ func extractCategory(f *_flag) {
 		return
 	}
 	// Look for a leading "[...]" in the description.
-	if desc[0] != '[' {
+	if !strings.HasPrefix(desc, "[") {
 		return
 	}
 	closeBracket := strings.Index(desc, "]")
