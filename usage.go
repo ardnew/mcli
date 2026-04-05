@@ -29,11 +29,17 @@ type usagePrinter struct {
 	flagCount    int
 	hasShortFlag bool
 
-	subCmds        commands
-	globalFlagHelp []usageItem
-	cmdFlagHelp    []usageItem
-	nonFlagHelp    []usageItem
-	envVarsHelp    []usageItem
+	subCmds             commands
+	globalFlagHelp      []usageItem
+	cmdFlagHelp         []usageItem
+	cmdFlagCategoryHelp []categoryUsageItems
+	nonFlagHelp         []usageItem
+	envVarsHelp         []usageItem
+}
+
+type categoryUsageItems struct {
+	category string
+	items    []usageItem
 }
 
 func (p *usagePrinter) Do() {
@@ -185,7 +191,7 @@ func (p *usagePrinter) splitAndFormatFlags() {
 
 	var (
 		globalFlagHelp []usageItem
-		cmdFlagHelp    []usageItem
+		cmdFlags       []*_flag
 		nonFlagHelp    []usageItem
 		envVarsHelp    []usageItem
 	)
@@ -194,11 +200,11 @@ func (p *usagePrinter) splitAndFormatFlags() {
 			if f.hidden && !showHidden {
 				continue
 			}
-			usage := f.getUsage(hasShortFlag)
 			if f.isGlobal {
+				usage := f.getUsage(hasShortFlag)
 				globalFlagHelp = append(globalFlagHelp, usage)
 			} else {
-				cmdFlagHelp = append(cmdFlagHelp, usage)
+				cmdFlags = append(cmdFlags, f)
 			}
 		}
 	}
@@ -210,15 +216,49 @@ func (p *usagePrinter) splitAndFormatFlags() {
 		usage := f.getUsage(false)
 		envVarsHelp = append(envVarsHelp, usage)
 	}
+
+	// Check if cmd flags have categories.
+	catGroups, hasCategories := groupFlagsByCategory(cmdFlags)
+	if hasCategories {
+		var categoryHelp []categoryUsageItems
+		for _, grp := range catGroups {
+			var items []usageItem
+			for _, f := range grp.flags {
+				items = append(items, f.getUsage(hasShortFlag))
+			}
+			categoryHelp = append(categoryHelp, categoryUsageItems{
+				category: grp.category,
+				items:    items,
+			})
+		}
+		p.cmdFlagCategoryHelp = categoryHelp
+	} else {
+		var cmdFlagHelp []usageItem
+		for _, f := range cmdFlags {
+			cmdFlagHelp = append(cmdFlagHelp, f.getUsage(hasShortFlag))
+		}
+		p.cmdFlagHelp = cmdFlagHelp
+	}
+
 	p.globalFlagHelp = globalFlagHelp
-	p.cmdFlagHelp = cmdFlagHelp
 	p.nonFlagHelp = nonFlagHelp
 	p.envVarsHelp = envVarsHelp
 }
 
 func (p *usagePrinter) printCmdFlags() {
 	out := p.out
-	if len(p.cmdFlagHelp) > 0 {
+	if len(p.cmdFlagCategoryHelp) > 0 {
+		var allItems [][]usageItem
+		for _, grp := range p.cmdFlagCategoryHelp {
+			allItems = append(allItems, grp.items)
+		}
+		maxPrefixLen := calcMaxPrefixLen(allItems)
+		for _, grp := range p.cmdFlagCategoryHelp {
+			fmt.Fprint(out, addTrailingColon(grp.category)+"\n")
+			printWithAlignment(out, grp.items, maxPrefixLen)
+			fmt.Fprint(out, "\n")
+		}
+	} else if len(p.cmdFlagHelp) > 0 {
 		fmt.Fprint(out, "Flags:\n")
 		printWithAlignment(out, p.cmdFlagHelp, 0)
 		fmt.Fprint(out, "\n")

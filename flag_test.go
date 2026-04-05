@@ -209,3 +209,146 @@ func Test_findFlagIndex(t *testing.T) {
 		})
 	}
 }
+
+func Test_extractCategory(t *testing.T) {
+	tests := []struct {
+		name        string
+		cliTag      string
+		wantDesc    string
+		wantCat     string
+		wantName    string
+		wantShort   string
+	}{
+		{
+			name:     "no category",
+			cliTag:   "-n, --name, Who do you want to say to",
+			wantDesc: "Who do you want to say to",
+			wantCat:  "",
+			wantName: "name",
+		},
+		{
+			name:     "with category",
+			cliTag:   "-n, --name, Who do you want to say to [Network]",
+			wantDesc: "Who do you want to say to",
+			wantCat:  "Network",
+			wantName: "name",
+		},
+		{
+			name:     "category with spaces",
+			cliTag:   "-v, --verbose, Enable verbose output [Debug Options]",
+			wantDesc: "Enable verbose output",
+			wantCat:  "Debug Options",
+			wantName: "verbose",
+		},
+		{
+			name:     "empty brackets",
+			cliTag:   "-v, --verbose, Enable verbose output []",
+			wantDesc: "Enable verbose output []",
+			wantCat:  "",
+			wantName: "verbose",
+		},
+		{
+			name:     "no description with category",
+			cliTag:   "-v, --verbose",
+			wantDesc: "",
+			wantCat:  "",
+			wantName: "verbose",
+		},
+		{
+			name:     "modifier with category",
+			cliTag:   "#R, -n, --name, Name of the server [Network]",
+			wantDesc: "Name of the server",
+			wantCat:  "Network",
+			wantName: "name",
+		},
+		{
+			name:     "space separated desc with category",
+			cliTag:   "--verbose Enable verbose output [Debug]",
+			wantDesc: "Enable verbose output",
+			wantCat:  "Debug",
+			wantName: "verbose",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &_flag{}
+			parseCliTag(f, tt.cliTag)
+			assert.Equal(t, tt.wantDesc, f.description)
+			assert.Equal(t, tt.wantCat, f.category)
+			if tt.wantName != "" {
+				assert.Equal(t, tt.wantName, f.name)
+			}
+		})
+	}
+}
+
+func Test_groupFlagsByCategory(t *testing.T) {
+	flags := []*_flag{
+		{name: "flag1", category: "Network"},
+		{name: "flag2", category: "Network"},
+		{name: "flag3", category: "Debug"},
+		{name: "flag4"},
+		{name: "flag5", category: "Debug"},
+	}
+
+	groups, hasCategories := groupFlagsByCategory(flags)
+	assert.True(t, hasCategories)
+	assert.Len(t, groups, 3)
+
+	assert.Equal(t, "Network", groups[0].category)
+	assert.Len(t, groups[0].flags, 2)
+	assert.Equal(t, "flag1", groups[0].flags[0].name)
+	assert.Equal(t, "flag2", groups[0].flags[1].name)
+
+	assert.Equal(t, "Debug", groups[1].category)
+	assert.Len(t, groups[1].flags, 2)
+	assert.Equal(t, "flag3", groups[1].flags[0].name)
+	assert.Equal(t, "flag5", groups[1].flags[1].name)
+
+	assert.Equal(t, "Other Flags", groups[2].category)
+	assert.Len(t, groups[2].flags, 1)
+	assert.Equal(t, "flag4", groups[2].flags[0].name)
+}
+
+func Test_groupFlagsByCategory_noCategories(t *testing.T) {
+	flags := []*_flag{
+		{name: "flag1"},
+		{name: "flag2"},
+	}
+
+	groups, hasCategories := groupFlagsByCategory(flags)
+	assert.False(t, hasCategories)
+	assert.Nil(t, groups)
+}
+
+func Test_flag_CategoryUsageOutput(t *testing.T) {
+	resetDefaultApp()
+	var args struct {
+		Host    string `cli:"-H, --host, The hostname to connect to [Network]"`
+		Port    int    `cli:"-p, --port, The port number [Network]"`
+		Verbose bool   `cli:"-v, --verbose, Enable verbose output [Debug]"`
+		Quiet   bool   `cli:"-q, --quiet, Suppress output [Debug]"`
+		Name    string `cli:"-n, --name, Your name"`
+	}
+	fs, err := Parse(&args, WithErrorHandling(flag.ContinueOnError),
+		WithArgs([]string{"-H", "localhost", "-p", "8080", "-n", "test"}))
+	assert.Nil(t, err)
+
+	var buf bytes.Buffer
+	fs.SetOutput(&buf)
+	fs.Usage()
+
+	got := buf.String()
+	assert.Contains(t, got, "Network:")
+	assert.Contains(t, got, "Debug:")
+	assert.Contains(t, got, "Other Flags:")
+	assert.Contains(t, got, "--host")
+	assert.Contains(t, got, "--port")
+	assert.Contains(t, got, "--verbose")
+	assert.Contains(t, got, "--quiet")
+	assert.Contains(t, got, "--name")
+	// Description should not contain the category
+	assert.NotContains(t, got, "[Network]")
+	assert.NotContains(t, got, "[Debug]")
+}
