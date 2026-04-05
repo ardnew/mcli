@@ -874,30 +874,29 @@ func parseCliTag(f *_flag, cliTag string) {
 	extractCategory(f)
 }
 
-// extractCategory extracts an optional trailing [category] from the flag
-// description. The syntax is: "description text [category]".
-// If a bracketed category is found at the end of the description, it is
+// extractCategory extracts an optional leading [category] from the flag
+// description. The syntax is: "[category] description text".
+// If a bracketed category is found at the start of the description, it is
 // removed from the description and stored in f.category.
 func extractCategory(f *_flag) {
 	desc := f.description
 	if desc == "" {
 		return
 	}
-	// Look for a trailing "[...]" in the description.
-	closeBracket := len(desc) - 1
-	if desc[closeBracket] != ']' {
+	// Look for a leading "[...]" in the description.
+	if desc[0] != '[' {
 		return
 	}
-	openBracket := strings.LastIndex(desc, "[")
-	if openBracket < 0 {
+	closeBracket := strings.Index(desc, "]")
+	if closeBracket < 0 {
 		return
 	}
-	category := strings.TrimSpace(desc[openBracket+1 : closeBracket])
+	category := strings.TrimSpace(desc[1:closeBracket])
 	if category == "" {
 		return
 	}
 	f.category = category
-	f.description = strings.TrimSpace(desc[:openBracket])
+	f.description = strings.TrimSpace(desc[closeBracket+1:])
 }
 
 func (p *flagParser) validateNonflags() error {

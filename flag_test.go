@@ -228,22 +228,22 @@ func Test_extractCategory(t *testing.T) {
 		},
 		{
 			name:     "with category",
-			cliTag:   "-n, --name, Who do you want to say to [Network]",
+			cliTag:   "-n, --name, [Network] Who do you want to say to",
 			wantDesc: "Who do you want to say to",
 			wantCat:  "Network",
 			wantName: "name",
 		},
 		{
 			name:     "category with spaces",
-			cliTag:   "-v, --verbose, Enable verbose output [Debug Options]",
+			cliTag:   "-v, --verbose, [Debug Options] Enable verbose output",
 			wantDesc: "Enable verbose output",
 			wantCat:  "Debug Options",
 			wantName: "verbose",
 		},
 		{
 			name:     "empty brackets",
-			cliTag:   "-v, --verbose, Enable verbose output []",
-			wantDesc: "Enable verbose output []",
+			cliTag:   "-v, --verbose, [] Enable verbose output",
+			wantDesc: "[] Enable verbose output",
 			wantCat:  "",
 			wantName: "verbose",
 		},
@@ -256,16 +256,30 @@ func Test_extractCategory(t *testing.T) {
 		},
 		{
 			name:     "modifier with category",
-			cliTag:   "#R, -n, --name, Name of the server [Network]",
+			cliTag:   "#R, -n, --name, [Network] Name of the server",
 			wantDesc: "Name of the server",
 			wantCat:  "Network",
 			wantName: "name",
 		},
 		{
 			name:     "space separated desc with category",
-			cliTag:   "--verbose Enable verbose output [Debug]",
+			cliTag:   "--verbose [Debug] Enable verbose output",
 			wantDesc: "Enable verbose output",
 			wantCat:  "Debug",
+			wantName: "verbose",
+		},
+		{
+			name:     "category only no description",
+			cliTag:   "-v, --verbose, [Debug]",
+			wantDesc: "",
+			wantCat:  "Debug",
+			wantName: "verbose",
+		},
+		{
+			name:     "trailing brackets not treated as category",
+			cliTag:   "-v, --verbose, Enable output [like this]",
+			wantDesc: "Enable output [like this]",
+			wantCat:  "",
 			wantName: "verbose",
 		},
 	}
@@ -325,10 +339,10 @@ func Test_groupFlagsByCategory_noCategories(t *testing.T) {
 func Test_flag_CategoryUsageOutput(t *testing.T) {
 	resetDefaultApp()
 	var args struct {
-		Host    string `cli:"-H, --host, The hostname to connect to [Network]"`
-		Port    int    `cli:"-p, --port, The port number [Network]"`
-		Verbose bool   `cli:"-v, --verbose, Enable verbose output [Debug]"`
-		Quiet   bool   `cli:"-q, --quiet, Suppress output [Debug]"`
+		Host    string `cli:"-H, --host, [Network] The hostname to connect to"`
+		Port    int    `cli:"-p, --port, [Network] The port number"`
+		Verbose bool   `cli:"-v, --verbose, [Debug] Enable verbose output"`
+		Quiet   bool   `cli:"-q, --quiet, [Debug] Suppress output"`
 		Name    string `cli:"-n, --name, Your name"`
 	}
 	fs, err := Parse(&args, WithErrorHandling(flag.ContinueOnError),
