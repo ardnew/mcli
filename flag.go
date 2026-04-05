@@ -72,6 +72,7 @@ type _flag struct {
 	name        string
 	short       string
 	description string
+	category    string
 	defValue    string
 	envNames    []string
 	enums       []string
@@ -870,6 +871,32 @@ func parseCliTag(f *_flag, cliTag string) {
 			f.description = p
 		}
 	}
+	extractCategory(f)
+}
+
+// extractCategory extracts an optional leading [category] from the flag
+// description. The syntax is: "[category] description text".
+// If a bracketed category is found at the start of the description, it is
+// removed from the description and stored in f.category.
+func extractCategory(f *_flag) {
+	desc := f.description
+	if desc == "" {
+		return
+	}
+	// Look for a leading "[...]" in the description.
+	if !strings.HasPrefix(desc, "[") {
+		return
+	}
+	closeBracket := strings.Index(desc, "]")
+	if closeBracket < 0 {
+		return
+	}
+	category := strings.TrimSpace(desc[1:closeBracket])
+	if category == "" {
+		return
+	}
+	f.category = category
+	f.description = strings.TrimSpace(desc[closeBracket+1:])
 }
 
 func (p *flagParser) validateNonflags() error {
@@ -1022,4 +1049,48 @@ type usageItem struct {
 	prefix      string
 	description string
 	appendixes  []string
+}
+
+type categoryFlags struct {
+	category string
+	flags    []*_flag
+}
+
+func groupFlagsByCategory(flags []*_flag) ([]*categoryFlags, bool) {
+	hasCategories := false
+	for _, f := range flags {
+		if f.category != "" {
+			hasCategories = true
+			break
+		}
+	}
+	if !hasCategories {
+		return nil, false
+	}
+
+	var result []*categoryFlags
+	categoryIdxMap := make(map[string]int)
+	var noCategoryFlags []*_flag
+	for _, f := range flags {
+		if f.category == "" {
+			noCategoryFlags = append(noCategoryFlags, f)
+			continue
+		}
+		if idx, ok := categoryIdxMap[f.category]; !ok {
+			categoryIdxMap[f.category] = len(result)
+			result = append(result, &categoryFlags{
+				category: f.category,
+				flags:    []*_flag{f},
+			})
+		} else {
+			result[idx].flags = append(result[idx].flags, f)
+		}
+	}
+	if len(noCategoryFlags) > 0 {
+		result = append(result, &categoryFlags{
+			category: "Other Flags",
+			flags:    noCategoryFlags,
+		})
+	}
+	return result, true
 }
